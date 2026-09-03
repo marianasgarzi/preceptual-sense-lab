@@ -7,14 +7,14 @@
 4. Adaptive pages stop when their finish criteria are met.
 
 ## Directory Map
-- `pages/`: experiment flows plus student `TODO`s.
+- `pages/`: completed experiment flows and shared page-level helpers.
 - `pages/_shared_3afc_student.py`: shared adaptive helpers for 3AFC pages.
 - `utils/`: reusable plumbing (audio, config loading, adaptive logic, UI helpers).
 - `config/`: parameter values and limits.
 - `tests/`: unit tests for reusable modules.
 - `docs/`: these guides.
 
-## Utilities You Use but Don’t Edit
+## Shared Utilities
 - `utils/test_config.py`: loads and caches config JSON.
 - `utils/audio_tools.py`: builds waveforms and WAV bytes.
 - `utils/adaptive_3afc.py`: adaptive staircase state and reversal tracking.
@@ -26,8 +26,7 @@
 - Validate inputs before math; avoid divide-by-zero and empty-list crashes.
 - Keep seeded behavior deterministic.
 
-## Quick Debug Loop
-1. Change one function.
-2. Run the related page.
-3. Read the first error line and fix that issue.
-4. Repeat, then run `uv run pytest` and `uv run ruff check .`.
+## Verification Loop
+1. Run the related page and exercise its completion state.
+2. Read the first error line if a traceback occurs.
+3. Run `uv run pytest` and `uv run ruff check .` before submission.

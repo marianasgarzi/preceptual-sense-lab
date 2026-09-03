@@ -1,39 +1,68 @@
 # Perceptual Sense Lab
 
-Streamlit exercises for vision and hearing thresholds. All student work happens in `pages/`. **You do not need to use Flutter for this project. Only edit edit functions in this repository & report your findings**.
+Perceptual Sense Lab is a Streamlit application for a Human Sensory Thresholds course
+assignment. It provides six educational experiments for exploring visual and auditory
+thresholds under the participant's current equipment and environmental conditions.
 
-## Quick Start
-- Install tools: see `docs/install.md`.
-- Set up and run once: `uv python install 3.11 && uv sync && uv run streamlit run app.py`
-- Open the app at http://localhost:8501.
+The application includes:
 
-## What You Edit
-- Only files in `pages/`.
-- Every required change is marked with a `TODO` docstring and a `NotImplementedError`.
-- Shared 3AFC helpers live in `pages/_shared_3afc_student.py`; the rest are per-experiment pages.
+- Contrast Sensitivity: identifies letters across decreasing contrast levels.
+- Smallest Noticeable Size: resolves the orientation of a 5×5 Tumbling E and reports
+  angular resolution in arcminutes.
+- Pitch Frequency Range: records heard/not-heard probes from 20 Hz to 20,000 Hz.
+- Sound Gap Detection: estimates the shortest detected silent gap in noise.
+- Pitch Difference Threshold: estimates a detectable frequency difference in hertz.
+- Amplitude Difference Threshold: estimates a detectable level difference in decibels.
 
-## Files With TODOs
-- Vision: `pages/greyscale_resolution.py`, `pages/smallest_noticeable_size.py`
-- Hearing: `pages/pitch_frequency_range.py`, `pages/sound_gap_detection.py`, `pages/amplitude_threshold.py`, `pages/pitch_threshold.py`
-- Shared: `pages/_shared_3afc_student.py`
+## Requirements
 
-## Daily Commands
-- Run app: `uv run streamlit run app.py`
-- Lint: `uv run ruff check .`
-- Tests: `uv run pytest`
+- Python 3.11 or newer
+- Streamlit and the dependencies declared in `pyproject.toml`
+- A modern browser with audio playback support
 
-## Done Checklist
-- No `NotImplementedError` remains in `pages/`.
-- Pages load without crashes; bounds checks and clamps are in place.
-- Lint and tests pass.
-- Contrast page reports threshold %, log CS, and an estimated per-channel bit depth.
-- 3AFC tasks stop after 6 reversals and use the last 4 to estimate the threshold.
-- 3AFC pages should plot trial index vs. level with correct/incorrect markers and a threshold line.
+[`uv`](https://docs.astral.sh/uv/) is the recommended environment and dependency manager.
 
-## Documentation
-- Setup: `docs/install.md`
-- Assignment scope: `docs/assignment.md`
-- Function guidance: `docs/student_functions.md`
-- Architecture: `docs/app_logic.md`
+## Install and Run
 
-Please star this repo for good luck!
+```sh
+uv python install 3.11
+uv sync
+uv run streamlit run app.py
+```
+
+Open `http://localhost:8501` if the browser does not open automatically. A conventional
+virtual environment can also be used after installing the dependencies from
+`pyproject.toml`; launch it with:
+
+```sh
+streamlit run app.py
+```
+
+## Adaptive 3AFC Method
+
+Sound Gap Detection, Pitch Difference Threshold, and Amplitude Difference Threshold use
+three-alternative forced-choice trials: two intervals are references and one randomized
+interval contains the target. The shared staircase follows a 2-down-1-up rule, reducing
+the difference after two consecutive correct responses and increasing it after one
+incorrect response. Step size decreases at reversals. Each run ends after exactly six
+reversals, and the final threshold is the mean of the last four reversal values.
+
+## Privacy and Safety
+
+Results remain in the local Streamlit session.
+The application does not write participant results to disk, upload them, or send them to
+external services.
+
+These experiments are for educational use only. They are not medically validated and
+must not be used for diagnosis. Participants may stop at any time. For audio tests, begin
+at a comfortable low system volume, keep it fixed during a run, and stop immediately if
+sound becomes uncomfortable. Consumer playback equipment can also limit audible results.
+
+## Development Checks
+
+```sh
+uv run ruff check .
+uv run pytest
+```
+
+Additional setup and troubleshooting guidance is available in `docs/install.md`.

@@ -1,3 +1,5 @@
+import math
+
 import streamlit as st
 
 from pages._shared_3afc_student import (
@@ -22,7 +24,6 @@ from utils.three_afc import (
     render_completion_summary,
     render_feedback,
     render_recent_accuracy_metric,
-    render_staircase_plot,
     submit_3afc_response,
 )
 from utils.ui import (
@@ -49,15 +50,25 @@ render_instructions(
         "Select the louder interval in each trial."
     ),
     [
-        "Keep system volume fixed and only use in-app playback controls.",
+        "This educational activity is not a medical diagnostic test.",
+        "Perform the test in a quiet environment.",
+        (
+            "Begin at a comfortable low volume. Do not increase device or system "
+            "volume during the test."
+        ),
+        "Stop immediately if any sound becomes uncomfortable.",
         "Answer every trial even when unsure (forced choice).",
         "Adaptive step sizes shrink after reversals to stabilize the threshold.",
-        "After finishing, recreate the staircase plot from trial history as a lab task.",
+        "You may stop at any time by returning Home; responses stay in this local session.",
     ],
 )
 
 config = load_test_config()
 cfg = config["amplitude_discrimination"]
+REFERENCE_AMPLITUDE = float(cfg["reference_amplitude"]["min"])
+REFERENCE_FREQUENCY_HZ = int(cfg["reference_frequency_hz"]["default"])
+TONE_DURATION_S = float(cfg["tone_duration_s"])
+MAX_TARGET_AMPLITUDE = 0.8
 
 
 def student_build_amplitude_intervals_audio(
@@ -67,7 +78,7 @@ def student_build_amplitude_intervals_audio(
     reference_hz: int,
     target_index: int,
 ) -> list[bytes]:
-    """TODO: Build one 3AFC trial audio set for amplitude discrimination.
+    """Build one 3AFC trial audio set for amplitude discrimination.
 
     Why this function exists:
         Each trial needs exactly three candidate sounds with one target interval.
@@ -83,14 +94,58 @@ def student_build_amplitude_intervals_audio(
     Output:
         A list of exactly 3 WAV byte payloads in interval order.
 
-    Required behavior:
+    Behavior:
         - Convert `delta_db` to an amplitude ratio.
         - Build 3 tones at `reference_hz`.
         - Use baseline amplitude for two intervals.
         - Use louder amplitude for `target_index`.
         - Return WAV bytes compatible with `st.audio`.
     """
-    raise NotImplementedError("Not implemented yet; follow the docstring guidance.")
+    try:
+        safe_baseline = float(baseline_amplitude)
+        safe_delta_db = float(delta_db)
+        safe_reference_hz = float(reference_hz)
+    except (TypeError, ValueError) as error:
+        raise ValueError("Amplitude stimulus values must be numeric.") from error
+
+    amplitude_limits = cfg["reference_amplitude"]
+    frequency_limits = cfg["reference_frequency_hz"]
+    delta_limits = cfg["adaptive"]
+    ratio = 10 ** (safe_delta_db / 20.0) if math.isfinite(safe_delta_db) else math.inf
+    target_amplitude = safe_baseline * ratio
+    valid_duration = math.isfinite(TONE_DURATION_S) and 0.0 < TONE_DURATION_S <= 10.0
+    if not (
+        float(amplitude_limits["min"])
+        <= safe_baseline
+        <= float(amplitude_limits["max"])
+        and float(delta_limits["min_level"])
+        <= safe_delta_db
+        <= float(delta_limits["max_level"])
+        and float(frequency_limits["min"])
+        <= safe_reference_hz
+        <= float(frequency_limits["max"])
+        and valid_duration
+        and shared_student_validate_audio_params(
+            amplitude=safe_baseline,
+            stimulus_value=safe_reference_hz,
+        )
+        and math.isfinite(target_amplitude)
+        and safe_baseline < target_amplitude <= MAX_TARGET_AMPLITUDE
+    ):
+        raise ValueError("Amplitude, dB difference, frequency, or duration is unsafe.")
+
+    target_mask = shared_student_build_three_interval_targets(target_index=target_index)
+    reference_wav = single_tone_wav(
+        frequency_hz=safe_reference_hz,
+        duration_s=TONE_DURATION_S,
+        amplitude=safe_baseline,
+    )
+    target_wav = single_tone_wav(
+        frequency_hz=safe_reference_hz,
+        duration_s=TONE_DURATION_S,
+        amplitude=target_amplitude,
+    )
+    return [target_wav if is_target else reference_wav for is_target in target_mask]
 
 
 def student_apply_reversal_update(
@@ -103,7 +158,7 @@ def student_apply_reversal_update(
     min_level: float,
     max_level: float,
 ) -> tuple[float, int]:
-    """Shared 3AFC TODO: implement in `pages/_shared_3afc_student.py`."""
+    """Delegate to the shared 3AFC implementation."""
     return shared_student_apply_reversal_update(
         current_level=current_level,
         step=step,
@@ -116,7 +171,7 @@ def student_apply_reversal_update(
 
 
 def student_plot_staircase(history: list[dict], threshold: float, y_label: str, title: str) -> None:
-    """Shared 3AFC TODO: implement in `pages/_shared_3afc_student.py`."""
+    """Delegate to the shared 3AFC implementation."""
     shared_student_plot_staircase(
         history=history,
         threshold=threshold,
@@ -126,7 +181,7 @@ def student_plot_staircase(history: list[dict], threshold: float, y_label: str, 
 
 
 def student_build_three_interval_targets(*, target_index: int) -> list[bool]:
-    """Shared 3AFC TODO: implement in `pages/_shared_3afc_student.py`."""
+    """Delegate to the shared 3AFC implementation."""
     return shared_student_build_three_interval_targets(target_index=target_index)
 
 
@@ -140,7 +195,7 @@ def student_update_staircase_state(
     min_level: float,
     max_level: float,
 ) -> tuple[float, int]:
-    """Shared 3AFC TODO: implement in `pages/_shared_3afc_student.py`."""
+    """Delegate to the shared 3AFC implementation."""
     return shared_student_update_staircase_state(
         current_level=current_level,
         step=step,
@@ -155,7 +210,7 @@ def student_update_staircase_state(
 def student_estimate_threshold_from_reversals(
     *, reversals: list[float], fallback_level: float, tail_count: int = 4
 ) -> float:
-    """Shared 3AFC TODO: implement in `pages/_shared_3afc_student.py`."""
+    """Delegate to the shared 3AFC implementation."""
     return shared_student_estimate_threshold_from_reversals(
         reversals=reversals,
         fallback_level=fallback_level,
@@ -164,12 +219,12 @@ def student_estimate_threshold_from_reversals(
 
 
 def student_compute_recent_accuracy(history: list[dict], window: int = 12) -> float:
-    """Shared 3AFC TODO: implement in `pages/_shared_3afc_student.py`."""
+    """Delegate to the shared 3AFC implementation."""
     return shared_student_compute_recent_accuracy(history=history, window=window)
 
 
 def student_validate_audio_params(*, amplitude: float, frequency_hz: int) -> bool:
-    """Shared 3AFC TODO: implement in `pages/_shared_3afc_student.py`."""
+    """Delegate to the shared 3AFC implementation."""
     return shared_student_validate_audio_params(
         amplitude=amplitude,
         stimulus_value=float(frequency_hz),
@@ -179,7 +234,7 @@ def student_validate_audio_params(*, amplitude: float, frequency_hz: int) -> boo
 def student_plot_staircase_with_threshold(
     *, history: list[dict], threshold: float, y_label: str, title: str
 ) -> None:
-    """Shared 3AFC TODO: implement in `pages/_shared_3afc_student.py`."""
+    """Delegate to the shared 3AFC implementation."""
     shared_student_plot_staircase_with_threshold(
         history=history,
         threshold=threshold,
@@ -188,84 +243,6 @@ def student_plot_staircase_with_threshold(
     )
 
 
-with st.expander("Assignment TODOs (Edit This Page)"):
-    st.markdown(
-        "- Implement `student_build_amplitude_intervals_audio`.\n"
-        "- Implement shared 3AFC helpers in `pages/_shared_3afc_student.py`:\n"
-        "  - `shared_student_apply_reversal_update`\n"
-        "  - `shared_student_plot_staircase`\n"
-        "  - `shared_student_build_three_interval_targets`\n"
-        "  - `shared_student_update_staircase_state`\n"
-        "  - `shared_student_estimate_threshold_from_reversals`\n"
-        "  - `shared_student_compute_recent_accuracy`\n"
-        "  - `shared_student_validate_audio_params`\n"
-        "  - `shared_student_plot_staircase_with_threshold`"
-    )
-
-st.caption(
-    "How these functions connect: generate 3-interval audio -> collect response -> "
-    "update staircase/reversals -> estimate threshold -> compute accuracy -> plot results."
-)
-
-try:
-    _ = student_build_three_interval_targets(target_index=1)
-    _ = student_build_amplitude_intervals_audio(
-        baseline_amplitude=float(cfg["reference_amplitude"]["default"]),
-        delta_db=float(cfg["adaptive"]["start_level"]),
-        reference_hz=int(cfg["reference_frequency_hz"]["default"]),
-        target_index=1,
-    )
-    _ = student_apply_reversal_update(
-        current_level=float(cfg["adaptive"]["start_level"]),
-        step=float(cfg["adaptive"]["initial_step"]),
-        is_correct=True,
-        correct_streak=1,
-        down_n=int(cfg["adaptive"]["down"]),
-        min_level=float(cfg["adaptive"]["min_level"]),
-        max_level=float(cfg["adaptive"]["max_level"]),
-    )
-    _ = student_update_staircase_state(
-        current_level=float(cfg["adaptive"]["start_level"]),
-        step=float(cfg["adaptive"]["initial_step"]),
-        is_correct=False,
-        correct_streak=0,
-        down_n=int(cfg["adaptive"]["down"]),
-        min_level=float(cfg["adaptive"]["min_level"]),
-        max_level=float(cfg["adaptive"]["max_level"]),
-    )
-    _ = student_estimate_threshold_from_reversals(
-        reversals=[float(cfg["adaptive"]["start_level"])],
-        fallback_level=float(cfg["adaptive"]["start_level"]),
-        tail_count=1,
-    )
-    _ = student_compute_recent_accuracy(
-        history=[{"Correct": "Yes"}, {"Correct": "No"}],
-        window=2,
-    )
-    _ = student_validate_audio_params(
-        amplitude=float(cfg["reference_amplitude"]["default"]),
-        frequency_hz=int(cfg["reference_frequency_hz"]["default"]),
-    )
-    student_plot_staircase(
-        history=[{"Trial": 1, "Level": float(cfg["adaptive"]["start_level"]), "Correct": "Yes"}],
-        threshold=float(cfg["adaptive"]["start_level"]),
-        y_label="Amplitude Delta (dB)",
-        title="Preview Staircase",
-    )
-    student_plot_staircase_with_threshold(
-        history=[{"Trial": 1, "Level": float(cfg["adaptive"]["start_level"]), "Correct": "Yes"}],
-        threshold=float(cfg["adaptive"]["start_level"]),
-        y_label="Amplitude Delta (dB)",
-        title="Preview Staircase",
-    )
-except NotImplementedError as error:
-    st.error(str(error))
-    st.warning(
-        "Assignment mode is active for this page. Complete "
-        "`student_build_amplitude_intervals_audio` in this file and the shared 3AFC "
-        "TODOs in `pages/_shared_3afc_student.py`, then reload."
-    )
-    st.stop()
 
 adaptive = init_adaptive_state(
     "amplitude",
@@ -283,39 +260,37 @@ feedback_key = "amplitude_last_feedback"
 
 with st.container(border=True):
     st.subheader("3AFC Trial")
-    baseline_amplitude = st.slider(
-        "Reference amplitude",
-        min_value=float(cfg["reference_amplitude"]["min"]),
-        max_value=float(cfg["reference_amplitude"]["max"]),
-        value=float(cfg["reference_amplitude"]["default"]),
-        step=float(cfg["reference_amplitude"]["step"]),
-        key="amp_reference",
-    )
-    reference_hz = st.number_input(
-        "Reference tone frequency (Hz)",
-        min_value=int(cfg["reference_frequency_hz"]["min"]),
-        max_value=int(cfg["reference_frequency_hz"]["max"]),
-        value=int(cfg["reference_frequency_hz"]["default"]),
-        step=int(cfg["reference_frequency_hz"]["step"]),
-    )
+    baseline_amplitude = REFERENCE_AMPLITUDE
+    reference_hz = REFERENCE_FREQUENCY_HZ
     ratio = 10 ** (current_delta_db / 20.0)
-    target_amplitude = max(0.01, min(0.95, baseline_amplitude * ratio))
+    target_amplitude = baseline_amplitude * ratio
+    setup_col_1, setup_col_2 = st.columns(2)
+    setup_col_1.metric("Fixed Reference Frequency", f"{reference_hz} Hz")
+    setup_col_2.metric("Fixed Reference Amplitude", f"{baseline_amplitude:.2f}")
     st.caption(
         f"Current adaptive delta: {current_delta_db:.2f} dB | "
+        f"Target amplitude: {target_amplitude:.4f} | Duration: {TONE_DURATION_S:.1f} s | "
         f"Reversals: {len(adaptive['reversals'])}/{adaptive['max_reversals']}"
     )
 
+    if not student_validate_audio_params(
+        amplitude=baseline_amplitude,
+        frequency_hz=reference_hz,
+    ):
+        st.error("Playback frequency or reference amplitude is outside the safe range.")
+        st.stop()
+    trial_audio = student_build_amplitude_intervals_audio(
+        baseline_amplitude=baseline_amplitude,
+        delta_db=current_delta_db,
+        reference_hz=reference_hz,
+        target_index=int(trial["target_index"]),
+    )
+    if len(trial_audio) != 3:
+        st.error("The trial must contain exactly three audio intervals.")
+        st.stop()
     play_cols = st.columns(3)
-    for idx in range(3):
-        amplitude = target_amplitude if idx == trial["target_index"] else baseline_amplitude
-        play_cols[idx].audio(
-            single_tone_wav(
-                frequency_hz=float(reference_hz),
-                duration_s=float(cfg["tone_duration_s"]),
-                amplitude=amplitude,
-            ),
-            format="audio/wav",
-        )
+    for idx, wav_bytes in enumerate(trial_audio):
+        play_cols[idx].audio(wav_bytes, format="audio/wav")
         play_cols[idx].caption(f"Interval {idx + 1}")
 
 with st.container(border=True):
@@ -347,21 +322,41 @@ with st.container(border=True):
 
 if adaptive["finished"]:
     with st.container(border=True):
-        st.subheader("Adaptive Test Complete")
+        st.subheader("Test Complete")
         st.success("Staircase finished. Final estimate and statistics are shown below.")
         history = adaptive["history"]
+        st.metric("Final Amplitude-Difference Threshold", f"{estimated_db:.2f} dB")
         render_completion_summary(adaptive, estimated_value=estimated_db, value_label="dB")
-        render_staircase_plot(
+        st.caption("Final threshold is the mean of reversal points 3–6.")
+        st.dataframe(
+            [
+                {"Reversal": index, "Amplitude Difference (dB)": float(value)}
+                for index, value in enumerate(adaptive["reversals"], start=1)
+            ],
+            width="stretch",
+            hide_index=True,
+        )
+        student_plot_staircase_with_threshold(
             history=history,
-            estimated_value=estimated_db,
-            threshold_label="Estimated Threshold",
+            threshold=estimated_db,
             y_label="Amplitude Delta (dB)",
             title="Amplitude Discrimination Adaptive Staircase",
+        )
+        st.subheader("Engineering and Human-Factors Interpretation")
+        st.write(
+            "Amplitude thresholds inform sensible volume-control increments and the "
+            "salience of warning sounds. Accessible workplace and environmental audio "
+            "should use comfortably distinguishable level changes, avoid unsafe loudness, "
+            "and not treat this individual measurement as a clinical norm."
+        )
+        st.caption(
+            "For the assignment report, document the session's auditory condition "
+            "(unaided, hearing aid/assistive device, or other) without recording a diagnosis."
         )
 
 with st.container(border=True):
     st.subheader("Test Controls")
-    if st.button("Restart Adaptive Test", width="stretch"):
+    if st.button("Restart Test", width="stretch"):
         reset_adaptive_state("amplitude")
         st.session_state.pop(feedback_key, None)
         st.rerun()

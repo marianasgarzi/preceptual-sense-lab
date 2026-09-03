@@ -21,8 +21,8 @@ Choose one method.
 ### Method A: Git Clone
 
 ```sh
-git clone https://github.com/priyanshum17/healthsensing
-cd healthsensing
+git clone https://github.com/marianasgarzi/preceptual-sense-lab.git
+cd preceptual-sense-lab
 ```
 
 ### Method B: GitHub ZIP Download
@@ -30,7 +30,7 @@ cd healthsensing
 1. Open repo page on GitHub.
 2. Click `Code` -> `Download ZIP`.
 3. Extract ZIP.
-4. Open extracted `healthsensing` folder in VS Code.
+4. Open the extracted `preceptual-sense-lab` folder in VS Code.
 5. Open terminal in that folder.
 
 Folder check:

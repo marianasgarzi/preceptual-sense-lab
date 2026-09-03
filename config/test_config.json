@@ -18,7 +18,7 @@
     }
   },
   "tumbling_e": {
-    "size_levels_px": [140, 112, 90, 72, 58, 46, 36, 30, 24, 20, 16, 14, 12, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1],
+    "size_levels_px": [140, 112, 90, 72, 58, 46, 36, 30, 24, 20, 16, 14, 12, 10, 9, 8, 7, 6, 5],
     "max_reversals": 8,
     "setup": {
       "distance_cm": {
@@ -97,7 +97,7 @@
       "default": 1000,
       "step": 10
     },
-    "tone_duration_s": 1.5
+    "tone_duration_s": 2.0
   },
   "pitch_discrimination": {
     "adaptive": {
@@ -121,6 +121,6 @@
       "default": 0.35,
       "step": 0.05
     },
-    "tone_duration_s": 1.5
+    "tone_duration_s": 2.0
   }
 }

@@ -1,3 +1,5 @@
+import math
+
 import streamlit as st
 
 from pages._shared_3afc_student import (
@@ -22,7 +24,6 @@ from utils.three_afc import (
     render_completion_summary,
     render_feedback,
     render_recent_accuracy_metric,
-    render_staircase_plot,
     submit_3afc_response,
 )
 from utils.ui import (
@@ -48,15 +49,23 @@ render_instructions(
         "frequency than the reference. Select that interval each trial."
     ),
     [
-        "Keep volume fixed and use headphones if possible.",
+        "This educational activity is not a medical diagnostic test.",
+        (
+            "Begin at a comfortable low volume. Stop immediately if any sound "
+            "becomes uncomfortable."
+        ),
+        "Keep volume fixed throughout the test and use headphones if possible.",
         "Answer every trial even when unsure (forced choice).",
         "The adaptive staircase estimates your minimum detectable frequency increment.",
-        "After finishing, recreate the staircase plot from trial history as a lab task.",
+        "You may stop at any time by returning Home; responses stay in this local session.",
     ],
 )
 
 config = load_test_config()
 cfg = config["pitch_discrimination"]
+REFERENCE_FREQUENCY_HZ = int(cfg["reference_frequency_hz"]["default"])
+TONE_DURATION_S = float(cfg["tone_duration_s"])
+MAX_PLAYBACK_FREQUENCY_HZ = 20_000.0
 
 
 def student_build_pitch_intervals_audio(
@@ -66,7 +75,7 @@ def student_build_pitch_intervals_audio(
     amplitude: float,
     target_index: int,
 ) -> list[bytes]:
-    """TODO: Build one 3AFC trial audio set for pitch discrimination.
+    """Build one 3AFC trial audio set for pitch discrimination.
 
     Why this function exists:
         Each trial requires three tones where only one differs in pitch. This helper
@@ -81,12 +90,51 @@ def student_build_pitch_intervals_audio(
     Output:
         List of exactly 3 WAV byte payloads.
 
-    Required behavior:
+    Behavior:
         - Two clips at `reference_hz`.
         - One clip at `reference_hz + delta_hz`.
         - Keep duration and amplitude consistent across intervals.
     """
-    raise NotImplementedError("Not implemented yet; follow the docstring guidance.")
+    try:
+        safe_reference_hz = float(reference_hz)
+        safe_delta_hz = float(delta_hz)
+        safe_amplitude = float(amplitude)
+    except (TypeError, ValueError) as error:
+        raise ValueError("Pitch stimulus values must be numeric.") from error
+
+    target_hz = safe_reference_hz + safe_delta_hz
+    frequency_limits = cfg["reference_frequency_hz"]
+    valid_reference = (
+        float(frequency_limits["min"])
+        <= safe_reference_hz
+        <= float(frequency_limits["max"])
+    )
+    valid_duration = math.isfinite(TONE_DURATION_S) and 0.0 < TONE_DURATION_S <= 10.0
+    if not (
+        valid_reference
+        and math.isfinite(safe_delta_hz)
+        and safe_delta_hz > 0.0
+        and target_hz <= MAX_PLAYBACK_FREQUENCY_HZ
+        and valid_duration
+        and shared_student_validate_audio_params(
+            amplitude=safe_amplitude,
+            stimulus_value=safe_reference_hz,
+        )
+    ):
+        raise ValueError("Frequency, pitch difference, amplitude, or duration is unsafe.")
+
+    target_mask = shared_student_build_three_interval_targets(target_index=target_index)
+    reference_wav = single_tone_wav(
+        frequency_hz=safe_reference_hz,
+        duration_s=TONE_DURATION_S,
+        amplitude=safe_amplitude,
+    )
+    target_wav = single_tone_wav(
+        frequency_hz=target_hz,
+        duration_s=TONE_DURATION_S,
+        amplitude=safe_amplitude,
+    )
+    return [target_wav if is_target else reference_wav for is_target in target_mask]
 
 
 def student_apply_reversal_update(
@@ -99,7 +147,7 @@ def student_apply_reversal_update(
     min_level: float,
     max_level: float,
 ) -> tuple[float, int]:
-    """Shared 3AFC TODO: implement in `pages/_shared_3afc_student.py`."""
+    """Delegate to the shared 3AFC implementation."""
     return shared_student_apply_reversal_update(
         current_level=current_level,
         step=step,
@@ -112,7 +160,7 @@ def student_apply_reversal_update(
 
 
 def student_plot_staircase(history: list[dict], threshold: float, y_label: str, title: str) -> None:
-    """Shared 3AFC TODO: implement in `pages/_shared_3afc_student.py`."""
+    """Delegate to the shared 3AFC implementation."""
     shared_student_plot_staircase(
         history=history,
         threshold=threshold,
@@ -122,7 +170,7 @@ def student_plot_staircase(history: list[dict], threshold: float, y_label: str, 
 
 
 def student_build_three_interval_targets(*, target_index: int) -> list[bool]:
-    """Shared 3AFC TODO: implement in `pages/_shared_3afc_student.py`."""
+    """Delegate to the shared 3AFC implementation."""
     return shared_student_build_three_interval_targets(target_index=target_index)
 
 
@@ -136,7 +184,7 @@ def student_update_staircase_state(
     min_level: float,
     max_level: float,
 ) -> tuple[float, int]:
-    """Shared 3AFC TODO: implement in `pages/_shared_3afc_student.py`."""
+    """Delegate to the shared 3AFC implementation."""
     return shared_student_update_staircase_state(
         current_level=current_level,
         step=step,
@@ -151,7 +199,7 @@ def student_update_staircase_state(
 def student_estimate_threshold_from_reversals(
     *, reversals: list[float], fallback_level: float, tail_count: int = 4
 ) -> float:
-    """Shared 3AFC TODO: implement in `pages/_shared_3afc_student.py`."""
+    """Delegate to the shared 3AFC implementation."""
     return shared_student_estimate_threshold_from_reversals(
         reversals=reversals,
         fallback_level=fallback_level,
@@ -160,12 +208,12 @@ def student_estimate_threshold_from_reversals(
 
 
 def student_compute_recent_accuracy(history: list[dict], window: int = 12) -> float:
-    """Shared 3AFC TODO: implement in `pages/_shared_3afc_student.py`."""
+    """Delegate to the shared 3AFC implementation."""
     return shared_student_compute_recent_accuracy(history=history, window=window)
 
 
 def student_validate_audio_params(*, amplitude: float, reference_hz: int) -> bool:
-    """Shared 3AFC TODO: implement in `pages/_shared_3afc_student.py`."""
+    """Delegate to the shared 3AFC implementation."""
     return shared_student_validate_audio_params(
         amplitude=amplitude,
         stimulus_value=float(reference_hz),
@@ -175,7 +223,7 @@ def student_validate_audio_params(*, amplitude: float, reference_hz: int) -> boo
 def student_plot_staircase_with_threshold(
     *, history: list[dict], threshold: float, y_label: str, title: str
 ) -> None:
-    """Shared 3AFC TODO: implement in `pages/_shared_3afc_student.py`."""
+    """Delegate to the shared 3AFC implementation."""
     shared_student_plot_staircase_with_threshold(
         history=history,
         threshold=threshold,
@@ -184,83 +232,6 @@ def student_plot_staircase_with_threshold(
     )
 
 
-with st.expander("Assignment TODOs (Edit This Page)"):
-    st.markdown(
-        "- Implement `student_build_pitch_intervals_audio`.\n"
-        "- Implement shared 3AFC helpers in `pages/_shared_3afc_student.py`:\n"
-        "  - `shared_student_apply_reversal_update`\n"
-        "  - `shared_student_plot_staircase`\n"
-        "  - `shared_student_build_three_interval_targets`\n"
-        "  - `shared_student_update_staircase_state`\n"
-        "  - `shared_student_estimate_threshold_from_reversals`\n"
-        "  - `shared_student_compute_recent_accuracy`\n"
-        "  - `shared_student_validate_audio_params`\n"
-        "  - `shared_student_plot_staircase_with_threshold`"
-    )
-
-st.caption(
-    "How these functions connect: generate 3 pitch intervals -> collect forced-choice "
-    "responses -> run staircase updates/reversals -> estimate threshold -> visualize staircase."
-)
-
-try:
-    _ = student_build_three_interval_targets(target_index=1)
-    _ = student_build_pitch_intervals_audio(
-        reference_hz=int(cfg["reference_frequency_hz"]["default"]),
-        delta_hz=float(cfg["adaptive"]["start_level"]),
-        amplitude=float(cfg["playback_amplitude"]["default"]),
-        target_index=1,
-    )
-    _ = student_apply_reversal_update(
-        current_level=float(cfg["adaptive"]["start_level"]),
-        step=float(cfg["adaptive"]["initial_step"]),
-        is_correct=True,
-        correct_streak=1,
-        down_n=int(cfg["adaptive"]["down"]),
-        min_level=float(cfg["adaptive"]["min_level"]),
-        max_level=float(cfg["adaptive"]["max_level"]),
-    )
-    _ = student_update_staircase_state(
-        current_level=float(cfg["adaptive"]["start_level"]),
-        step=float(cfg["adaptive"]["initial_step"]),
-        is_correct=False,
-        correct_streak=0,
-        down_n=int(cfg["adaptive"]["down"]),
-        min_level=float(cfg["adaptive"]["min_level"]),
-        max_level=float(cfg["adaptive"]["max_level"]),
-    )
-    _ = student_estimate_threshold_from_reversals(
-        reversals=[float(cfg["adaptive"]["start_level"])],
-        fallback_level=float(cfg["adaptive"]["start_level"]),
-        tail_count=1,
-    )
-    _ = student_compute_recent_accuracy(
-        history=[{"Correct": "Yes"}, {"Correct": "No"}],
-        window=2,
-    )
-    _ = student_validate_audio_params(
-        amplitude=float(cfg["playback_amplitude"]["default"]),
-        reference_hz=int(cfg["reference_frequency_hz"]["default"]),
-    )
-    student_plot_staircase(
-        history=[{"Trial": 1, "Level": float(cfg["adaptive"]["start_level"]), "Correct": "Yes"}],
-        threshold=float(cfg["adaptive"]["start_level"]),
-        y_label="Pitch Delta (Hz)",
-        title="Preview Staircase",
-    )
-    student_plot_staircase_with_threshold(
-        history=[{"Trial": 1, "Level": float(cfg["adaptive"]["start_level"]), "Correct": "Yes"}],
-        threshold=float(cfg["adaptive"]["start_level"]),
-        y_label="Pitch Delta (Hz)",
-        title="Preview Staircase",
-    )
-except NotImplementedError as error:
-    st.error(str(error))
-    st.warning(
-        "Assignment mode is active for this page. Complete `student_build_pitch_intervals_audio` "
-        "in this file and the shared 3AFC TODOs in `pages/_shared_3afc_student.py`, then reload."
-    )
-    st.stop()
 
 adaptive = init_adaptive_state(
     "pitch_threshold",
@@ -278,38 +249,49 @@ feedback_key = "pitch_threshold_last_feedback"
 
 with st.container(border=True):
     st.subheader("3AFC Trial")
-    reference_hz = st.number_input(
-        "Reference frequency (Hz)",
-        min_value=int(cfg["reference_frequency_hz"]["min"]),
-        max_value=int(cfg["reference_frequency_hz"]["max"]),
-        value=int(cfg["reference_frequency_hz"]["default"]),
-        step=int(cfg["reference_frequency_hz"]["step"]),
-    )
+    reference_hz = REFERENCE_FREQUENCY_HZ
+    st.metric("Fixed Reference Frequency", f"{reference_hz} Hz")
     amplitude = st.slider(
         "Playback amplitude",
         min_value=float(cfg["playback_amplitude"]["min"]),
         max_value=float(cfg["playback_amplitude"]["max"]),
         value=float(cfg["playback_amplitude"]["default"]),
         step=float(cfg["playback_amplitude"]["step"]),
+        key="pitch_threshold_amplitude",
+        disabled=bool(adaptive["history"]),
     )
-    target_hz = min(20000.0, float(reference_hz) + current_delta_hz)
+    if adaptive["history"]:
+        st.caption(
+            "Playback amplitude is locked for this adaptive run. Keep system/device "
+            "volume fixed until the run is complete."
+        )
+    else:
+        st.caption(
+            "Choose a comfortable low amplitude before starting, then keep system/device "
+            "volume fixed throughout the run."
+        )
+    target_hz = float(reference_hz) + current_delta_hz
     st.caption(
         f"Current adaptive pitch delta: {current_delta_hz:.1f} Hz | "
-        f"Target frequency: {target_hz:.1f} Hz"
+        f"Target frequency: {target_hz:.1f} Hz | Duration: {TONE_DURATION_S:.1f} s"
     )
     st.caption(f"Reversals: {len(adaptive['reversals'])}/{adaptive['max_reversals']}")
 
+    if not student_validate_audio_params(amplitude=amplitude, reference_hz=reference_hz):
+        st.error("Playback frequency or amplitude is outside the safe configured range.")
+        st.stop()
+    trial_audio = student_build_pitch_intervals_audio(
+        reference_hz=reference_hz,
+        delta_hz=current_delta_hz,
+        amplitude=amplitude,
+        target_index=int(trial["target_index"]),
+    )
+    if len(trial_audio) != 3:
+        st.error("The trial must contain exactly three audio intervals.")
+        st.stop()
     play_cols = st.columns(3)
-    for idx in range(3):
-        test_hz = target_hz if idx == trial["target_index"] else float(reference_hz)
-        play_cols[idx].audio(
-            single_tone_wav(
-                frequency_hz=test_hz,
-                duration_s=float(cfg["tone_duration_s"]),
-                amplitude=amplitude,
-            ),
-            format="audio/wav",
-        )
+    for idx, wav_bytes in enumerate(trial_audio):
+        play_cols[idx].audio(wav_bytes, format="audio/wav")
         play_cols[idx].caption(f"Interval {idx + 1}")
 
 with st.container(border=True):
@@ -341,21 +323,42 @@ with st.container(border=True):
 
 if adaptive["finished"]:
     with st.container(border=True):
-        st.subheader("Adaptive Test Complete")
+        st.subheader("Test Complete")
         st.success("Staircase finished. Final estimate and statistics are shown below.")
         history = adaptive["history"]
+        st.metric("Final Pitch-Difference Threshold", f"{estimated_hz:.1f} Hz")
         render_completion_summary(adaptive, estimated_value=estimated_hz, value_label="Hz")
-        render_staircase_plot(
+        st.caption("Final threshold is the mean of reversal points 3–6.")
+        st.dataframe(
+            [
+                {"Reversal": index, "Pitch Difference (Hz)": float(value)}
+                for index, value in enumerate(adaptive["reversals"], start=1)
+            ],
+            width="stretch",
+            hide_index=True,
+        )
+        student_plot_staircase_with_threshold(
             history=history,
-            estimated_value=estimated_hz,
-            threshold_label="Estimated Threshold",
+            threshold=estimated_hz,
             y_label="Pitch Delta (Hz)",
             title="Pitch Discrimination Adaptive Staircase",
+        )
+        st.subheader("Engineering and Human-Factors Interpretation")
+        st.write(
+            "Pitch differences can distinguish auditory icons, alarms, notifications, "
+            "and music or audio cues. Human-machine communication should use changes "
+            "comfortably above this measured threshold and provide redundant cues for "
+            "important information; this individual result is not a clinical norm."
+        )
+        st.caption(
+            "For the assignment report, document the session's auditory condition "
+            "(unaided, hearing aid/assistive device, or other) without recording a diagnosis."
         )
 
 with st.container(border=True):
     st.subheader("Test Controls")
-    if st.button("Restart Adaptive Test", width="stretch"):
+    if st.button("Restart Test", width="stretch"):
         reset_adaptive_state("pitch_threshold")
         st.session_state.pop(feedback_key, None)
+        st.session_state.pop("pitch_threshold_amplitude", None)
         st.rerun()

@@ -1,3 +1,4 @@
+import math
 import random
 
 import streamlit as st
@@ -23,14 +24,15 @@ render_instructions(
     "How To Run This Test",
     (
         "You will see one Tumbling E at a time. Choose its orientation. "
-        "Correct responses make the next E smaller; incorrect responses make it larger. "
-        "The smallest rendered optotype is 4 px, so if that remains easy, increase "
-        "viewing distance."
+        "Correct responses make the next E smaller. The first incorrect response "
+        "completes the test at the smallest size identified correctly."
     ),
     [
+        "This educational activity is not a medical diagnostic test.",
         "Keep viewing distance fixed during the run.",
+        "Keep your correction condition consistent if you use glasses or contacts.",
         "Answer every trial with one of: Up, Down, Left, Right.",
-        "If the smallest E is still obvious, move farther from the display and restart.",
+        "You may stop at any time by returning Home; responses stay in this local session.",
     ],
 )
 
@@ -39,9 +41,13 @@ cfg = config["tumbling_e"]
 SIZE_LEVELS_PX = [int(v) for v in cfg["size_levels_px"]]
 ORIENTATIONS = ["Up", "Down", "Left", "Right"]
 
+if not SIZE_LEVELS_PX or min(SIZE_LEVELS_PX) < 5:
+    st.error("The Tumbling-E schedule must use a minimum full-optotype size of 5 px.")
+    st.stop()
+
 
 def student_next_size_index(*, current_index: int, is_correct: bool, max_index: int) -> int:
-    """TODO: Compute the next adaptive size index for the staircase.
+    """Compute the next adaptive size index for the staircase.
 
     Why this function exists:
         This is the core adaptive rule for the visual acuity task. The page calls it
@@ -51,18 +57,21 @@ def student_next_size_index(*, current_index: int, is_correct: bool, max_index: 
 
     Inputs:
         current_index: Current index in `SIZE_LEVELS_PX`.
-        is_correct: Whether the student selected the correct orientation this trial.
+        is_correct: Whether the participant selected the correct orientation this trial.
         max_index: Largest valid index in the size-level list.
 
     Output:
         The next valid index (integer) in the closed range `[0, max_index]`.
 
-    Required behavior:
+    Behavior:
         - Correct response: move to a smaller optotype by increasing index by 1.
         - Incorrect response: move to a larger optotype by decreasing index by 1.
         - Always clamp so index never goes below 0 or above `max_index`.
     """
-    raise NotImplementedError("Not implemented yet; follow the docstring guidance.")
+    safe_max_index = max(0, int(max_index))
+    safe_index = max(0, min(int(current_index), safe_max_index))
+    change = 1 if is_correct else -1
+    return max(0, min(safe_max_index, safe_index + change))
 
 
 def student_build_trial_log_row(
@@ -73,7 +82,7 @@ def student_build_trial_log_row(
     correct_orientation: str,
     response: str,
 ) -> dict[str, str | int | float]:
-    """TODO: Build a complete, standardized row for the trial log table.
+    """Build a complete, standardized row for the trial log table.
 
     Why this function exists:
         The experiment needs a clean row per trial for grading and analysis. This
@@ -91,18 +100,27 @@ def student_build_trial_log_row(
         Dictionary with the exact table columns expected by this page, including a
         correctness field derived from `response == correct_orientation`.
 
-    Required behavior:
+    Behavior:
         - Keep column names consistent with existing table rendering.
         - Include correctness as an explicit readable value.
         - Round MAR to 2 decimals for stable, readable output.
     """
-    raise NotImplementedError("Not implemented yet; follow the docstring guidance.")
+    critical_feature_px = float(size_px) / 5.0
+    return {
+        "Trial": max(1, int(trial_no)),
+        "E Orientation": str(correct_orientation),
+        "Full E Size (px)": int(size_px),
+        "Critical Feature (px)": round(critical_feature_px, 2),
+        "Participant Response": str(response),
+        "Correct": "Yes" if response == correct_orientation else "No",
+        "Angular Resolution (arcmin)": round(float(mar_arcmin), 2),
+    }
 
 
 def student_validate_screen_geometry(
     *, distance_cm: float, screen_width_mm: float, screen_width_px: int
 ) -> bool:
-    """TODO: Validate whether screen-geometry inputs are usable.
+    """Validate whether screen-geometry inputs are usable.
 
     Why this function exists:
         MAR calculations rely on physically meaningful geometry values. Invalid
@@ -116,16 +134,35 @@ def student_validate_screen_geometry(
     Output:
         `True` when values are valid for computation; otherwise `False`.
 
-    Suggested checks:
+    Validation:
         - All values are positive.
         - Pixel width is large enough to avoid divide-by-zero / tiny denominator.
         - Distance and width remain in realistic human-testing ranges.
     """
-    raise NotImplementedError("Not implemented yet; follow the docstring guidance.")
+    try:
+        safe_distance = float(distance_cm)
+        safe_width_mm = float(screen_width_mm)
+        safe_width_px = int(screen_width_px)
+    except (TypeError, ValueError):
+        return False
+    setup = cfg["setup"]
+    return (
+        math.isfinite(safe_distance)
+        and math.isfinite(safe_width_mm)
+        and float(setup["distance_cm"]["min"])
+        <= safe_distance
+        <= float(setup["distance_cm"]["max"])
+        and float(setup["screen_width_mm"]["min"])
+        <= safe_width_mm
+        <= float(setup["screen_width_mm"]["max"])
+        and int(setup["screen_width_px"]["min"])
+        <= safe_width_px
+        <= int(setup["screen_width_px"]["max"])
+    )
 
 
 def student_compute_mar_arcmin(size_px: int, mm_per_px: float, distance_cm: float) -> float:
-    """TODO: Compute MAR (minimum angle of resolution) in arcminutes.
+    """Compute MAR (minimum angle of resolution) in arcminutes.
 
     Why this function exists:
         Pixel size alone is device-dependent; MAR converts that size into a vision
@@ -139,13 +176,31 @@ def student_compute_mar_arcmin(size_px: int, mm_per_px: float, distance_cm: floa
     Output:
         MAR in arcminutes as a float.
 
-    Implementation guidance:
+    Calculation:
         - Convert pixel size to millimeters (`size_px * mm_per_px`).
         - Convert distance to matching units (millimeters).
         - Use a small-angle geometry formula, then convert radians to arcminutes.
         - Return a positive float and guard invalid denominators.
     """
-    raise NotImplementedError("Not implemented yet; follow the docstring guidance.")
+    try:
+        safe_size_px = float(size_px)
+        safe_mm_per_px = float(mm_per_px)
+        safe_distance_cm = float(distance_cm)
+    except (TypeError, ValueError):
+        return 0.0
+    if not (
+        math.isfinite(safe_size_px)
+        and math.isfinite(safe_mm_per_px)
+        and math.isfinite(safe_distance_cm)
+        and safe_size_px > 0.0
+        and safe_mm_per_px > 0.0
+        and safe_distance_cm > 0.0
+    ):
+        return 0.0
+    critical_feature_mm = (safe_size_px / 5.0) * safe_mm_per_px
+    distance_mm = safe_distance_cm * 10.0
+    angle_radians = 2.0 * math.atan(critical_feature_mm / (2.0 * distance_mm))
+    return angle_radians * (180.0 / math.pi) * 60.0
 
 
 def student_format_trial_log_row(
@@ -156,48 +211,26 @@ def student_format_trial_log_row(
     correct_orientation: str,
     response: str,
 ) -> dict[str, str | int | float]:
-    """TODO: Wrapper/formatter for a standardized trial-log row.
+    """Wrapper/formatter for a standardized trial-log row.
 
     Why this function exists:
         In many real codebases, one helper computes values and another helper
         formats them for display. Keeping this function separate teaches modular
         design and avoids spreading table-format logic across the page.
 
-    Expected use:
+    Behavior:
         This function should return the same schema as `student_build_trial_log_row`,
         potentially by calling it internally and applying final formatting rules.
     """
-    raise NotImplementedError("Not implemented yet; follow the docstring guidance.")
-
-
-with st.expander("Assignment TODOs (Edit This Page)"):
-    st.markdown(
-        "- Implement `student_next_size_index`.\n"
-        "- Implement `student_build_trial_log_row`.\n"
-        "- Implement `student_validate_screen_geometry`.\n"
-        "- Implement `student_compute_mar_arcmin`.\n"
-        "- Implement `student_format_trial_log_row`.\n"
-        "- Keep existing table column names."
+    return student_build_trial_log_row(
+        trial_no=trial_no,
+        size_px=size_px,
+        mar_arcmin=mar_arcmin,
+        correct_orientation=correct_orientation,
+        response=response,
     )
 
-st.caption(
-    "How these functions connect: validate screen geometry -> convert size to MAR -> "
-    "log each trial consistently -> update index for next adaptive trial."
-)
 
-try:
-    _ = student_next_size_index(current_index=0, is_correct=True, max_index=len(SIZE_LEVELS_PX) - 1)
-    _ = student_build_trial_log_row(
-        trial_no=1,
-        size_px=SIZE_LEVELS_PX[0],
-        mar_arcmin=1.0,
-        correct_orientation="Up",
-        response="Up",
-    )
-except NotImplementedError as error:
-    st.error(str(error))
-    st.info("This page is locked until the student TODO functions are implemented.")
-    st.stop()
 
 if not student_validate_screen_geometry(
     distance_cm=float(cfg["setup"]["distance_cm"]["default"]),
@@ -215,6 +248,9 @@ def init_tumbling_state() -> dict:
             "size_index": 0,
             "trial_orientation": random.choice(ORIENTATIONS),
             "history": [],
+            "finished": False,
+            "threshold_size_px": None,
+            "completion_reason": None,
         }
     return st.session_state[key]
 
@@ -243,6 +279,9 @@ def e_symbol(size_px: int, orientation: str) -> str:
     )
 
 
+state = init_tumbling_state()
+setup_locked = bool(state["history"])
+
 with st.container(border=True):
     st.subheader("Test Setup")
     col_1, col_2, col_3 = st.columns(3)
@@ -252,6 +291,7 @@ with st.container(border=True):
         max_value=float(cfg["setup"]["distance_cm"]["max"]),
         value=float(cfg["setup"]["distance_cm"]["default"]),
         step=float(cfg["setup"]["distance_cm"]["step"]),
+        disabled=setup_locked,
     )
     screen_width_mm = col_2.number_input(
         "Screen width (mm)",
@@ -259,6 +299,7 @@ with st.container(border=True):
         max_value=float(cfg["setup"]["screen_width_mm"]["max"]),
         value=float(cfg["setup"]["screen_width_mm"]["default"]),
         step=float(cfg["setup"]["screen_width_mm"]["step"]),
+        disabled=setup_locked,
     )
     screen_width_px = col_3.number_input(
         "Screen width (pixels)",
@@ -266,12 +307,22 @@ with st.container(border=True):
         max_value=int(cfg["setup"]["screen_width_px"]["max"]),
         value=int(cfg["setup"]["screen_width_px"]["default"]),
         step=int(cfg["setup"]["screen_width_px"]["step"]),
+        disabled=setup_locked,
     )
+    if not student_validate_screen_geometry(
+        distance_cm=distance_cm,
+        screen_width_mm=screen_width_mm,
+        screen_width_px=screen_width_px,
+    ):
+        st.error("Screen geometry is outside the valid configured ranges.")
+        st.stop()
     mm_per_px = float(screen_width_mm) / float(screen_width_px)
     st.caption(f"Pixel pitch: {mm_per_px:.4f} mm/px")
+    st.caption("Geometry assumes square display pixels, so horizontal pitch applies vertically.")
     st.caption(
-        "Smallest E size in this app is 4 px. Increase viewing distance to push "
-        "difficulty when needed."
+        f"The configured E schedule ranges from {SIZE_LEVELS_PX[0]} px to "
+        f"{SIZE_LEVELS_PX[-1]} px. Its critical stroke/gap width is always one-fifth "
+        "of the full optotype size."
     )
 
 
@@ -279,17 +330,20 @@ def mar_arcmin_for_size(size_px: int, mm_per_px: float, distance_cm: float) -> f
     return student_compute_mar_arcmin(size_px=size_px, mm_per_px=mm_per_px, distance_cm=distance_cm)
 
 
-state = init_tumbling_state()
 feedback_key = "tumbling_e_last_feedback"
 current_index = int(state["size_index"])
 current_size_px = SIZE_LEVELS_PX[current_index]
 current_orientation = state["trial_orientation"]
 current_mar = mar_arcmin_for_size(current_size_px, mm_per_px, distance_cm)
+finished = bool(state["finished"])
 
 with st.container(border=True):
     st.subheader("Adaptive Tumbling E Trial")
+    current_critical_px = current_size_px / 5.0
     st.caption(
-        f"Current size: {current_size_px}px | Current MAR: {current_mar:.2f} arcmin"
+        f"Full E size: {current_size_px}px | Critical stroke/gap: "
+        f"{current_critical_px:.2f}px | Current angular resolution: "
+        f"{current_mar:.2f} arcmin"
     )
     st.markdown(e_symbol(current_size_px, current_orientation), unsafe_allow_html=True)
 
@@ -301,13 +355,14 @@ with st.container(border=True):
     elif last_feedback == "incorrect":
         st.error("Previous response: Incorrect.")
 
-    response = st.radio("Orientation", ORIENTATIONS, horizontal=True)
+    response = st.radio("Orientation", ORIENTATIONS, horizontal=True, disabled=finished)
     submitted = st.button(
         "Submit Response",
         type="primary",
         width="stretch",
+        disabled=finished,
     )
-    if submitted:
+    if submitted and not finished:
         is_correct = response == current_orientation
         next_index = student_next_size_index(
             current_index=current_index,
@@ -315,7 +370,7 @@ with st.container(border=True):
             max_index=len(SIZE_LEVELS_PX) - 1,
         )
         state["history"].append(
-            student_build_trial_log_row(
+            student_format_trial_log_row(
                 trial_no=len(state["history"]) + 1,
                 size_px=current_size_px,
                 mar_arcmin=current_mar,
@@ -324,10 +379,93 @@ with st.container(border=True):
             )
         )
 
-        state["size_index"] = next_index
-        state["trial_orientation"] = next_orientation(current_orientation)
+        if is_correct:
+            state["threshold_size_px"] = current_size_px
+            if current_index >= len(SIZE_LEVELS_PX) - 1:
+                state["finished"] = True
+                state["completion_reason"] = "smallest_level_correct"
+            else:
+                state["size_index"] = next_index
+                state["trial_orientation"] = next_orientation(current_orientation)
+        else:
+            state["finished"] = True
+            state["completion_reason"] = "incorrect_response"
         st.session_state[feedback_key] = "correct" if is_correct else "incorrect"
         st.rerun()
+
+with st.container(border=True):
+    st.subheader("Results")
+    threshold_size_value = state["threshold_size_px"]
+    if not finished:
+        if threshold_size_value is None:
+            st.caption("Test in progress. No provisional threshold is available yet.")
+        else:
+            st.metric("Provisional Smallest Correct Full E Size", f"{threshold_size_value} px")
+            st.caption("This is an in-progress value, not a final result.")
+    elif threshold_size_value is None:
+        st.subheader("Test Complete")
+        st.warning(
+            "The first E orientation was not identified correctly, so a threshold "
+            "was not established within the tested range."
+        )
+        st.caption(
+            "For the assignment report, document the session's visual condition "
+            "(unaided, glasses, contacts, or other) without recording a diagnosis."
+        )
+    else:
+        st.subheader("Test Complete")
+        threshold_size_px = int(threshold_size_value)
+        critical_feature_px = threshold_size_px / 5.0
+        critical_feature_mm = critical_feature_px * mm_per_px
+        threshold_arcmin = student_compute_mar_arcmin(
+            size_px=threshold_size_px,
+            mm_per_px=mm_per_px,
+            distance_cm=distance_cm,
+        )
+        st.success("Tumbling-E run complete.")
+        result_col_1, result_col_2, result_col_3, result_col_4 = st.columns(4)
+        result_col_1.metric("Smallest Correct Full E", f"{threshold_size_px} px")
+        result_col_2.metric("Critical Feature Width", f"{critical_feature_px:.2f} px")
+        result_col_3.metric("Physical Critical Width", f"{critical_feature_mm:.4f} mm")
+        result_col_4.metric("Angular Resolution", f"{threshold_arcmin:.2f} arcmin")
+
+        if state["completion_reason"] == "incorrect_response":
+            st.caption(
+                "The threshold is the smallest correctly identified size immediately "
+                "before the first incorrect response."
+            )
+        else:
+            st.caption(
+                "The participant reached the display-limited 5 px lower bound. At this "
+                "size, each unit of the 5×5 E is one physical display pixel; a finer "
+                "threshold cannot be measured reliably with the current pixel geometry."
+            )
+
+        st.subheader("Geometry Used")
+        st.markdown(
+            "- Pixel pitch: `screen width (mm) / horizontal resolution (px)`\n"
+            "- Critical feature: `full E size (px) / 5`\n"
+            "- Critical width: `critical feature (px) × pixel pitch (mm/px)`\n"
+            "- Exact angle: `θ = 2 × atan(critical width / (2 × viewing distance))`\n"
+            "- Angular resolution: `θ × 180/π × 60` arcminutes"
+        )
+        st.caption(
+            "The 5×5 SVG preserves equal stroke and gap units. The test stops at a 5 px "
+            "full E so its one-unit critical feature is never rendered below one display pixel."
+        )
+
+        st.subheader("Display and Readability Interpretation")
+        st.write(
+            "This critical-feature threshold helps estimate whether text strokes, icon details, "
+            "and warning symbols remain resolvable at the tested distance. Important display "
+            "elements should use features comfortably larger than this boundary. Longer viewing "
+            "distances increase the required physical feature size, so display design should "
+            "account for expected distance, pixel density, and the visibility needs of users."
+        )
+        st.caption(
+            "For the assignment report, document the session's visual condition "
+            "(unaided, glasses, contacts, or other) without recording a diagnosis."
+        )
 
 with st.container(border=True):
     st.subheader("Trial Log")
@@ -345,7 +483,7 @@ with st.container(border=True):
 
 with st.container(border=True):
     st.subheader("Test Controls")
-    if st.button("Restart Staircase", width="stretch"):
+    if st.button("Restart Test", width="stretch"):
         st.session_state.pop("tumbling_e_state", None)
         st.session_state.pop(feedback_key, None)
         st.rerun()

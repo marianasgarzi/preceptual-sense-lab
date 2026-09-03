@@ -1,75 +1,32 @@
 import streamlit as st
 
-from utils.ui import render_experiment_tile
+st.set_page_config(page_title="Perceptual Sense Lab", layout="wide")
 
-st.set_page_config(
-    page_title="Human Sensory Limits",
-    layout="wide"
+st.title("Human Sensory Thresholds — Perceptual Sense Lab")
+st.write(
+    "Explore six short experiments that estimate visual and auditory thresholds "
+    "under your current viewing, listening, equipment, and environmental conditions."
 )
 
-st.title("Vision and Hearing Experiment Suite")
-st.caption(
-    "Objective: Run standardized vision and hearing tasks to estimate sensory thresholds."
+st.info(
+    "Educational use only. This application is not medically validated and is not a "
+    "diagnostic test. You may stop participating at any time. Results remain in this "
+    "local Streamlit session and are not uploaded or permanently stored."
 )
 
-with st.container(border=True):
-    st.subheader("Objective")
-    st.write(
-        "This assignment focuses on standardized psychophysics tasks. For vision, "
-        "you will run a Pelli-style contrast task and a Tumbling-E resolution task. "
-        "For hearing, you will run pitch range screening plus adaptive 3AFC tests for "
-        "gap detection, amplitude discrimination, and pitch discrimination."
-    )
+st.subheader("Choose an experiment")
 
-with st.container(border=True):
-    st.subheader("Experiment Summary")
-    metric_total, metric_vision, metric_hearing = st.columns(3)
-    metric_total.metric("Total Experiments", 6)
-    metric_vision.metric("Vision", 2)
-    metric_hearing.metric("Hearing", 4)
+experiments = [
+    ("Contrast Sensitivity", "pages/greyscale_resolution.py"),
+    ("Smallest Noticeable Size", "pages/smallest_noticeable_size.py"),
+    ("Pitch Frequency Range", "pages/pitch_frequency_range.py"),
+    ("Sound Gap Detection", "pages/sound_gap_detection.py"),
+    ("Pitch Difference Threshold", "pages/pitch_threshold.py"),
+    ("Amplitude Difference Threshold", "pages/amplitude_threshold.py"),
+]
 
-with st.container(border=True):
-    st.subheader("Sight Experiments")
-    render_experiment_tile(
-        title="Contrast Sensitivity (Pelli-Style)",
-        description=(
-            "Estimate log contrast sensitivity using a standardized letter-contrast progression."
-        ),
-        page_path="pages/greyscale_resolution.py",
-        key="open_greyscale",
-    )
-    render_experiment_tile(
-        title="Visual Resolution (Tumbling E)",
-        description="Use orientation judgments and compute MAR (minimum angle of resolution).",
-        page_path="pages/smallest_noticeable_size.py",
-        key="open_size",
-    )
-
-with st.container(border=True):
-    st.subheader("Hearing Experiments")
-    render_experiment_tile(
-        title="Pitch Frequency Range",
-        description="Screen audible low/high limits with fine frequency controls and direct input.",
-        page_path="pages/pitch_frequency_range.py",
-        key="open_pitch",
-    )
-    render_experiment_tile(
-        title="Sound Gap Detection (3AFC Adaptive)",
-        description=(
-            "Find temporal gap threshold with a 3-alternative forced-choice adaptive staircase."
-        ),
-        page_path="pages/sound_gap_detection.py",
-        key="open_gap",
-    )
-    render_experiment_tile(
-        title="Amplitude Discrimination (3AFC Adaptive)",
-        description="Estimate loudness discrimination threshold in dB with adaptive 3AFC trials.",
-        page_path="pages/amplitude_threshold.py",
-        key="open_amplitude",
-    )
-    render_experiment_tile(
-        title="Pitch Discrimination (3AFC Adaptive)",
-        description="Estimate the smallest detectable frequency increment above a reference tone.",
-        page_path="pages/pitch_threshold.py",
-        key="open_pitch_threshold",
-    )
+left, right = st.columns(2)
+for index, (label, page) in enumerate(experiments):
+    container = left if index % 2 == 0 else right
+    with container:
+        st.page_link(page, label=label, icon="🧪")
